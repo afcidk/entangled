@@ -9,6 +9,7 @@
  */
 
 #include <stdio.h>
+#include <time.h>
 
 #include "mam/examples/send-common.h"
 
@@ -18,8 +19,8 @@ int main(int ac, char **av) {
   tryte_t channel_id[MAM_CHANNEL_ID_TRYTE_SIZE];
   retcode_t ret = RC_OK;
 
-  if (ac != 6) {
-    fprintf(stderr, "usage: send-msg <host> <port> <seed> <payload> <last_packet>\n");
+  if (ac != 7) {
+    fprintf(stderr, "usage: send-msg <host> <port> <seed> <payload> <last_packet> <size>\n");
     return EXIT_FAILURE;
   }
 
@@ -45,8 +46,15 @@ int main(int ac, char **av) {
     return EXIT_FAILURE;
   }
 
+  FILE *file = fopen("address.txt", "a");
+  if (file == NULL) {
+      fprintf(stderr, "Cannot open file");
+      return EXIT_FAILURE;
+  }
+
   bundle_transactions_new(&bundle);
 
+  int tx_size = atoi(av[6]);
   {
     trit_t msg_id[MAM_MSG_ID_SIZE];
 
@@ -67,7 +75,12 @@ int main(int ac, char **av) {
 
     //   return RC_OK;
     // }
-
+    for (int i=0; i<tx_size-1; ++i) {
+        if ((ret = mam_example_write_packet(&api, bundle, av[4], msg_id, 0)) != RC_OK) {
+          fprintf(stderr, "mam_example_write_packet failed with err %d\n", ret);
+          return EXIT_FAILURE;
+        }
+    }
     if ((ret = mam_example_write_packet(&api, bundle, av[4], msg_id, last_packet)) != RC_OK) {
       fprintf(stderr, "mam_example_write_packet failed with err %d\n", ret);
       return EXIT_FAILURE;
@@ -79,6 +92,13 @@ int main(int ac, char **av) {
     fprintf(stderr, "send_bundle failed with err %d\n", ret);
     return EXIT_FAILURE;
   }
+  for (size_t i = 0; i < FLEX_TRIT_SIZE_243; i++) {
+      fprintf(file, "%c", ((iota_transaction_t *)utarray_front(bundle))->essence.bundle[i]);
+  }
+  fprintf(file, " %lu\n", time(NULL));
+  fclose(file);
+
+  fprintf(stderr, "Size: %d, time: %lu\n", tx_size, time(NULL));
 
   // Saving and destroying MAM API
   if ((ret = mam_api_save(&api, MAM_FILE, NULL, 0)) != RC_OK) {
